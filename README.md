@@ -1,6 +1,7 @@
 # AskPG
 
-Paul Graham's writing has answered a lot of questions for me—and raised even more.
+Paul Graham's writing has answered a lot of my questions. It has also left me with
+many more.
 AskPG grew out of a simple idea: turn the body of work he has already made public into
 a conversation.
 
@@ -57,9 +58,6 @@ build only the free local full-text index, run `askpg index --skip-embeddings`.
 | `/memory` | Show how many conversation turns are stored locally |
 | `/clear` | Permanently clear conversation memory |
 | `/quit` | Exit |
-
-Option/Alt+Delete removes the previous word. The animated `Thinking…` indicator clears
-as soon as the answer is ready.
 
 ## Other commands
 
