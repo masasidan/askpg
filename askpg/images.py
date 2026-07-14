@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 import base64
+import shutil
+import subprocess
+import sys
+import tempfile
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
+from uuid import uuid4
 
 
 MAX_IMAGE_COUNT = 1500
@@ -16,12 +21,17 @@ class ImageError(RuntimeError):
     pass
 
 
+class ClipboardImageUnavailable(ImageError):
+    pass
+
+
 @dataclass(frozen=True)
 class ImageAttachment:
     path: Path
     media_type: str
     data_url: str
     size: int
+    label: str | None = None
 
 
 def _detect_media_type(data: bytes) -> str | None:
@@ -121,3 +131,83 @@ def load_images(paths: Sequence[str | Path]) -> list[ImageAttachment]:
     images = [load_image(path) for path in paths]
     validate_image_collection(images)
     return images
+
+
+def _export_macos_clipboard_type(path: Path, image_class: str) -> bool:
+    script = """
+on run argv
+    set outputPath to item 1 of argv
+    set imageData to the clipboard as «class IMAGE_CLASS»
+    set outputFile to open for access POSIX file outputPath with write permission
+    try
+        set eof outputFile to 0
+        write imageData to outputFile
+        close access outputFile
+    on error errorMessage
+        try
+            close access outputFile
+        end try
+        error errorMessage
+    end try
+end run
+""".replace("IMAGE_CLASS", image_class)
+    try:
+        result = subprocess.run(
+            ["osascript", "-e", script, str(path)],
+            capture_output=True,
+            text=True,
+            timeout=8,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0 and path.exists() and path.stat().st_size > 0
+
+
+def load_clipboard_image() -> ImageAttachment:
+    if sys.platform != "darwin":
+        raise ClipboardImageUnavailable(
+            "Clipboard image paste is currently supported on macOS. Use /attach <path>."
+        )
+
+    with tempfile.TemporaryDirectory(prefix="askpg-clipboard-") as temporary:
+        root = Path(temporary)
+        png_path = root / "clipboard.png"
+        pngpaste = shutil.which("pngpaste")
+        if pngpaste:
+            try:
+                result = subprocess.run(
+                    [pngpaste, str(png_path)],
+                    capture_output=True,
+                    timeout=8,
+                    check=False,
+                )
+            except (OSError, subprocess.TimeoutExpired):
+                result = None
+            if result is not None and result.returncode != 0:
+                png_path.unlink(missing_ok=True)
+
+        if not png_path.exists() and not _export_macos_clipboard_type(
+            png_path, "PNGf"
+        ):
+            tiff_path = root / "clipboard.tiff"
+            if not _export_macos_clipboard_type(tiff_path, "TIFF"):
+                raise ClipboardImageUnavailable("The clipboard does not contain an image.")
+            try:
+                converted = subprocess.run(
+                    ["sips", "-s", "format", "png", str(tiff_path), "--out", str(png_path)],
+                    capture_output=True,
+                    timeout=12,
+                    check=False,
+                )
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                raise ImageError("Could not convert the clipboard image to PNG.") from exc
+            if converted.returncode != 0 or not png_path.exists():
+                raise ImageError("Could not convert the clipboard image to PNG.")
+
+        image = load_image(png_path)
+        return replace(
+            image,
+            path=Path(f"clipboard-{uuid4().hex}.png"),
+            label="clipboard image",
+        )
