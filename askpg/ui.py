@@ -73,6 +73,7 @@ def _system_clipboard_text() -> str:
 
 def create_chat_prompt(
     on_image_paste: Callable[[], None] | None = None,
+    on_attachment_delete: Callable[[], None] | None = None,
 ) -> PromptSession[str]:
     """Create an input editor whose prompt is separate from the editable buffer."""
     bindings = KeyBindings()
@@ -94,6 +95,17 @@ def create_chat_prompt(
         text = _system_clipboard_text()
         if text:
             event.current_buffer.insert_text(text)
+
+    @bindings.add(Keys.Backspace, eager=True)
+    def _backspace(event: KeyPressEvent) -> None:
+        buffer = event.current_buffer
+        if buffer.selection_state is not None:
+            buffer.cut_selection()
+        elif buffer.document.text_before_cursor:
+            buffer.delete_before_cursor(count=1)
+        elif not buffer.text and on_attachment_delete is not None:
+            on_attachment_delete()
+            event.app.invalidate()
 
     return PromptSession(key_bindings=bindings)
 

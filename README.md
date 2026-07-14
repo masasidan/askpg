@@ -54,9 +54,6 @@ build only the free local full-text index, run `askpg index --skip-embeddings`.
 | Command | Action |
 | --- | --- |
 | `/sources` | Show evidence used for the last answer |
-| `/attach <path>` | Attach an image file to your next question |
-| `/attachments` | List images waiting to be sent |
-| `/detach` | Clear images waiting to be sent |
 | `/research` | Turn inline citations and source lists on |
 | `/immersive` | Hide citations and source lists again |
 | `/memory` | Show how many conversation turns are stored locally |
@@ -94,12 +91,9 @@ are searched locally and included only when relevant.
 
 On macOS, copy a screenshot and press Ctrl+V while the `You:` prompt is active. AskPG
 shows `[attach 1]` beside the prompt without inserting it into your message. You can
-paste more than one image. Command+V continues to paste ordinary text through the
-Terminal.
-
-You can also type `/attach ` and drag an image file into the Terminal, then press Enter.
-Ask your question on the next prompt. Attached images are sent only with that question
-and are not added to persistent conversation memory.
+paste more than one image. With the text input empty, Backspace removes the most recent
+attachment. Command+V continues to paste ordinary text through the Terminal. Attached
+images are sent only with the next question and are not added to persistent memory.
 
 ## Models and API usage
 

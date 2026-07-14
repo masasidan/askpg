@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import shlex
 
 from rich.console import Console
 from rich.table import Table
@@ -274,7 +273,14 @@ def command_chat(args) -> None:
         validate_image_collection(combined)
         pending_images.append(image)
 
-    chat_prompt = create_chat_prompt(on_image_paste=queue_clipboard_image)
+    def remove_last_attachment() -> None:
+        if pending_images:
+            pending_images.pop()
+
+    chat_prompt = create_chat_prompt(
+        on_image_paste=queue_clipboard_image,
+        on_attachment_delete=remove_last_attachment,
+    )
     connection = _ready_connection()
     client = _openai_client()
     history = load_recent_history(connection)
@@ -283,8 +289,7 @@ def command_chat(args) -> None:
     remembered_turns = memory_count(connection) // 2
     console.print(
         f"[bold cyan]Paul[/bold cyan] — continuing with {remembered_turns} remembered turns\n"
-        "Commands: /attach, /attachments, /detach, /sources, /memory,\n"
-        "          /research, /immersive, /clear, /quit"
+        "Commands: /sources, /memory, /research, /immersive, /clear, /quit"
     )
     try:
         while True:
@@ -299,7 +304,6 @@ def command_chat(args) -> None:
             if not question:
                 continue
             command = question.lower()
-            command_name = question.split(maxsplit=1)[0].lower()
             if command in {"/quit", "/exit", "quit", "exit"}:
                 console.print("Bye.")
                 break
@@ -327,43 +331,6 @@ def command_chat(args) -> None:
                     _print_sources(last_sources)
                 else:
                     console.print("No sources retrieved yet.")
-                continue
-            if command_name == "/attach":
-                raw_paths = question[len(question.split(maxsplit=1)[0]) :].strip()
-                if not raw_paths:
-                    console.print("Usage: /attach <image path>")
-                    continue
-                try:
-                    paths = shlex.split(raw_paths)
-                    new_images = load_images(paths)
-                    existing_paths = {image.path for image in pending_images}
-                    additions = []
-                    for image in new_images:
-                        if image.path not in existing_paths:
-                            additions.append(image)
-                            existing_paths.add(image.path)
-                    combined = [*pending_images, *additions]
-                    validate_image_collection(combined)
-                    pending_images = combined
-                except (ImageError, ValueError) as exc:
-                    console.print(f"[red]Could not attach image:[/red] {exc}")
-                    continue
-                count = len(pending_images)
-                console.print(
-                    f"{count} image{'s' if count != 1 else ''} ready for your next question."
-                )
-                continue
-            if command == "/attachments":
-                if not pending_images:
-                    console.print("No images are attached.")
-                else:
-                    console.print("Images ready for the next question:")
-                    for image in pending_images:
-                        console.print(f"  {image.label or image.path}", markup=False)
-                continue
-            if command == "/detach":
-                pending_images.clear()
-                console.print("Attached images cleared.")
                 continue
             answer, last_sources = _answer(
                 connection,

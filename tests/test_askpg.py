@@ -8,6 +8,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from prompt_toolkit.application import create_app_session
+from prompt_toolkit.input.defaults import create_pipe_input
+from prompt_toolkit.output import DummyOutput
+
 from askpg.index import (
     SearchResult,
     chunk_text,
@@ -27,7 +31,12 @@ from askpg.memory import clear_memory, load_recent_history, memory_count, save_t
 from askpg.rag import RagError, breaks_character, generate_answer, source_prompt
 from askpg.retrieval import rerank_sources, rewrite_question
 from askpg.scraper import parse_essay, parse_essay_links
-from askpg.ui import ThinkingShimmer, previous_word_delete_count, user_prompt
+from askpg.ui import (
+    ThinkingShimmer,
+    create_chat_prompt,
+    previous_word_delete_count,
+    user_prompt,
+)
 
 
 class ScraperTests(unittest.TestCase):
@@ -473,6 +482,20 @@ class RetrievalTests(unittest.TestCase):
 
 
 class UiTests(unittest.TestCase):
+    def test_control_v_adds_and_backspace_removes_an_attachment(self):
+        actions = []
+        with create_pipe_input() as input_pipe:
+            with create_app_session(input=input_pipe, output=DummyOutput()):
+                session = create_chat_prompt(
+                    on_image_paste=lambda: actions.append("paste"),
+                    on_attachment_delete=lambda: actions.append("delete"),
+                )
+                input_pipe.send_text("\x16\x7fhello\r")
+                entered = session.prompt("")
+
+        self.assertEqual("hello", entered)
+        self.assertEqual(["paste", "delete"], actions)
+
     def test_attachment_markers_are_part_of_the_prompt_not_the_buffer(self):
         rendered = "".join(fragment[1] for fragment in user_prompt(2))
         self.assertEqual("You: [attach 1] [attach 2] ", rendered)

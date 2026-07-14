@@ -167,7 +167,7 @@ end run
 def load_clipboard_image() -> ImageAttachment:
     if sys.platform != "darwin":
         raise ClipboardImageUnavailable(
-            "Clipboard image paste is currently supported on macOS. Use /attach <path>."
+            "Clipboard image paste is currently supported on macOS. Use --image PATH instead."
         )
 
     with tempfile.TemporaryDirectory(prefix="askpg-clipboard-") as temporary:
