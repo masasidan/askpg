@@ -6,6 +6,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from askpg.index import (
     SearchResult,
@@ -15,12 +16,18 @@ from askpg.index import (
     sync_corpus,
     sync_tweets,
 )
-from askpg.images import ImageAttachment, ImageError, _gif_frame_count, load_image
+from askpg.images import (
+    ImageAttachment,
+    ImageError,
+    _gif_frame_count,
+    load_clipboard_image,
+    load_image,
+)
 from askpg.memory import clear_memory, load_recent_history, memory_count, save_turn
 from askpg.rag import RagError, breaks_character, generate_answer, source_prompt
 from askpg.retrieval import rerank_sources, rewrite_question
 from askpg.scraper import parse_essay, parse_essay_links
-from askpg.ui import ThinkingShimmer, previous_word_delete_count
+from askpg.ui import ThinkingShimmer, previous_word_delete_count, user_prompt
 
 
 class ScraperTests(unittest.TestCase):
@@ -211,6 +218,26 @@ class ImageTests(unittest.TestCase):
         animated_gif = static_gif[:-1] + static_gif[13:]
         self.assertEqual(1, _gif_frame_count(static_gif))
         self.assertEqual(2, _gif_frame_count(animated_gif))
+
+    def test_macos_clipboard_image_is_loaded_and_labeled(self):
+        png = base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+        )
+
+        def export_image(command, **_kwargs):
+            Path(command[-1]).write_bytes(png)
+            return type("Result", (), {"returncode": 0})()
+
+        with (
+            patch("askpg.images.sys.platform", "darwin"),
+            patch("askpg.images.shutil.which", return_value=None),
+            patch("askpg.images.subprocess.run", side_effect=export_image),
+        ):
+            image = load_clipboard_image()
+
+        self.assertEqual("clipboard image", image.label)
+        self.assertEqual("image/png", image.media_type)
+        self.assertTrue(image.data_url.startswith("data:image/png;base64,"))
 
 
 class RagTests(unittest.TestCase):
@@ -446,6 +473,10 @@ class RetrievalTests(unittest.TestCase):
 
 
 class UiTests(unittest.TestCase):
+    def test_attachment_markers_are_part_of_the_prompt_not_the_buffer(self):
+        rendered = "".join(fragment[1] for fragment in user_prompt(2))
+        self.assertEqual("You: [attach 1] [attach 2] ", rendered)
+
     def test_option_delete_only_changes_the_user_buffer(self):
         self.assertEqual(5, previous_word_delete_count("hello world"))
         self.assertEqual(8, previous_word_delete_count("hello world   "))

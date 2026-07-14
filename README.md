@@ -54,7 +54,7 @@ build only the free local full-text index, run `askpg index --skip-embeddings`.
 | Command | Action |
 | --- | --- |
 | `/sources` | Show evidence used for the last answer |
-| `/attach <path>` | Attach an image to your next question |
+| `/attach <path>` | Attach an image file to your next question |
 | `/attachments` | List images waiting to be sent |
 | `/detach` | Clear images waiting to be sent |
 | `/research` | Turn inline citations and source lists on |
@@ -92,9 +92,14 @@ askpg doctor                             check setup without exposing your key
 Recent dialogue is bounded rather than sending every past conversation. Older messages
 are searched locally and included only when relevant.
 
-To use a screenshot during chat, type `/attach ` and drag the image file into the
-Terminal, then press Enter. Ask your question on the next prompt. Attached images are
-sent only with that question and are not added to persistent conversation memory.
+On macOS, copy a screenshot and press Ctrl+V while the `You:` prompt is active. AskPG
+shows `[attach 1]` beside the prompt without inserting it into your message. You can
+paste more than one image. Command+V continues to paste ordinary text through the
+Terminal.
+
+You can also type `/attach ` and drag an image file into the Terminal, then press Enter.
+Ask your question on the next prompt. Attached images are sent only with that question
+and are not added to persistent conversation memory.
 
 ## Models and API usage
 

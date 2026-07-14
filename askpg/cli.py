@@ -29,6 +29,7 @@ from .index import (
 from .images import (
     ImageAttachment,
     ImageError,
+    load_clipboard_image,
     load_images,
     validate_image_collection,
 )
@@ -43,7 +44,7 @@ from .rag import RagError, generate_answer
 from .retrieval import rerank_sources, rewrite_question
 from .scraper import ScrapeError, scrape_all
 from .tweets import TweetScrapeError, scrape_tweets
-from .ui import USER_PROMPT, create_chat_prompt, thinking
+from .ui import create_chat_prompt, thinking, user_prompt
 
 
 console = Console(highlight=False)
@@ -265,13 +266,20 @@ def command_ask(args) -> None:
 
 
 def command_chat(args) -> None:
-    chat_prompt = create_chat_prompt()
+    pending_images: list[ImageAttachment] = []
+
+    def queue_clipboard_image() -> None:
+        image = load_clipboard_image()
+        combined = [*pending_images, image]
+        validate_image_collection(combined)
+        pending_images.append(image)
+
+    chat_prompt = create_chat_prompt(on_image_paste=queue_clipboard_image)
     connection = _ready_connection()
     client = _openai_client()
     history = load_recent_history(connection)
     last_sources = []
     research = bool(args.research)
-    pending_images: list[ImageAttachment] = []
     remembered_turns = memory_count(connection) // 2
     console.print(
         f"[bold cyan]Paul[/bold cyan] — continuing with {remembered_turns} remembered turns\n"
@@ -282,7 +290,9 @@ def command_chat(args) -> None:
         while True:
             try:
                 console.print()
-                question = chat_prompt.prompt(USER_PROMPT).strip()
+                question = chat_prompt.prompt(
+                    lambda: user_prompt(len(pending_images))
+                ).strip()
             except (EOFError, KeyboardInterrupt):
                 console.print("\nBye.")
                 break
@@ -349,7 +359,7 @@ def command_chat(args) -> None:
                 else:
                     console.print("Images ready for the next question:")
                     for image in pending_images:
-                        console.print(f"  {image.path}", markup=False)
+                        console.print(f"  {image.label or image.path}", markup=False)
                 continue
             if command == "/detach":
                 pending_images.clear()
