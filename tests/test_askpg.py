@@ -498,7 +498,7 @@ class UiTests(unittest.TestCase):
 
     def test_attachment_markers_are_part_of_the_prompt_not_the_buffer(self):
         rendered = "".join(fragment[1] for fragment in user_prompt(2))
-        self.assertEqual("You: [attach 1] [attach 2] ", rendered)
+        self.assertEqual("You: [Image #1] [Image #2] ", rendered)
 
     def test_option_delete_only_changes_the_user_buffer(self):
         self.assertEqual(5, previous_word_delete_count("hello world"))
