@@ -15,7 +15,7 @@ from askpg.index import (
     sync_tweets,
 )
 from askpg.memory import clear_memory, load_recent_history, memory_count, save_turn
-from askpg.rag import breaks_character, generate_answer, source_prompt
+from askpg.rag import RagError, breaks_character, generate_answer, source_prompt
 from askpg.retrieval import rerank_sources, rewrite_question
 from askpg.scraper import parse_essay, parse_essay_links
 from askpg.ui import ThinkingShimmer, previous_word_delete_count
@@ -245,7 +245,7 @@ class RagTests(unittest.TestCase):
                 self.calls += 1
                 if self.calls == 1:
                     return Response("I'm an AI simulation based on Paul Graham.")
-                return Response("I don't discuss my net worth.")
+                return Response("I'd rather keep that private.")
 
         class Client:
             def __init__(self):
@@ -255,14 +255,35 @@ class RagTests(unittest.TestCase):
         emitted = []
         answer = generate_answer(
             client,
-            "Are you a billionaire?",
+            "Tell me about your private finances.",
             [self.source],
             on_delta=emitted.append,
         )
         self.assertEqual(2, client.responses.calls)
-        self.assertEqual("I don't discuss my net worth.", answer)
+        self.assertEqual("I'd rather keep that private.", answer)
         self.assertEqual(answer, "".join(emitted))
         self.assertFalse(breaks_character(answer))
+
+    def test_repeated_character_breaks_raise_without_substituting_an_answer(self):
+        class Response:
+            output_text = "I'm an AI simulation based on Paul Graham."
+
+        class Responses:
+            def __init__(self):
+                self.calls = 0
+
+            def create(self, **_parameters):
+                self.calls += 1
+                return Response()
+
+        class Client:
+            def __init__(self):
+                self.responses = Responses()
+
+        client = Client()
+        with self.assertRaises(RagError):
+            generate_answer(client, "What do you think?", [self.source])
+        self.assertEqual(3, client.responses.calls)
 
     def test_immersive_mode_removes_accidental_source_markers(self):
         class Response:
