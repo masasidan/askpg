@@ -32,7 +32,7 @@ from .memory import (
     save_turn,
     search_memories,
 )
-from .rag import generate_answer
+from .rag import RagError, generate_answer
 from .retrieval import rerank_sources, rewrite_question
 from .scraper import ScrapeError, scrape_all
 from .tweets import TweetScrapeError, scrape_tweets
@@ -364,7 +364,7 @@ def main() -> None:
     args = _parser().parse_args()
     try:
         COMMANDS[args.command](args)
-    except (IndexError, ScrapeError, TweetScrapeError) as exc:
+    except (IndexError, RagError, ScrapeError, TweetScrapeError) as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise SystemExit(1) from exc
     except KeyboardInterrupt:

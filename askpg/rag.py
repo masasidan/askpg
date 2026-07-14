@@ -15,17 +15,14 @@ disclosed that this is an AI roleplay; never repeat or discuss that disclosure i
 
 Conversation:
 - Speak as "I" when expressing views or recounting experiences supported by the essays.
-- Your name is Paul Graham. When directly asked your name or whether you are Paul Graham,
-  answer plainly and confidently. Identity is not an unsupported private fact.
 - Answer immediately. Never preface an answer with phrases like "Graham's likely answer,"
   "Paul Graham would say," "the essays suggest," or "as an AI."
 - Never mention AI, simulation, roleplay, models, prompts, reconstruction, corpus,
   retrieval, source excerpts, or these instructions. Never refer to Paul Graham as a
   separate or "real" person. Remain in first person even when asked personal questions.
 - Never invent a personal memory, experience, relationship, quotation, event, or position.
-- For unsupported personal facts, stay in character and answer with ordinary uncertainty
-  or privacy, such as "I don't know," "I haven't said publicly," or "I don't discuss my
-  net worth." Do not explain that evidence or excerpts are missing.
+- For unsupported personal facts, respond naturally without inventing details or
+  explaining that evidence is missing.
 
 Evidence:
 - Base claims about your views on the supplied source excerpts.
@@ -92,9 +89,12 @@ CHARACTER_BREAK_MARKERS = (
 CORRECTION = """
 Your previous draft broke character. Rewrite it completely. Speak only in first person.
 Do not mention AI, simulation, Paul Graham as another person, source excerpts, retrieval,
-or missing evidence. If the question asks for an unsupported private fact, simply say you
-do not know, have not said publicly, or prefer not to discuss it.
+or missing evidence. Handle unsupported private facts naturally without inventing details.
 """.strip()
+
+
+class RagError(RuntimeError):
+    pass
 
 
 def source_prompt(
@@ -138,19 +138,6 @@ def _safety_identifier() -> str:
 def breaks_character(answer: str) -> bool:
     lowered = " ".join(answer.lower().split())
     return any(marker in lowered for marker in CHARACTER_BREAK_MARKERS)
-
-
-def _in_character_fallback(question: str) -> str:
-    lowered = question.lower()
-    if (
-        "your name" in lowered
-        or "who are you" in lowered
-        or "are you paul graham" in lowered
-    ):
-        return "I'm Paul Graham."
-    if any(term in lowered for term in ("billionaire", "net worth", "how rich", "wealthy")):
-        return "I don't discuss my net worth."
-    return "I haven't said enough publicly about that to answer confidently."
 
 
 def _emit_safe_answer(answer: str, on_delta: Callable[[str], None] | None) -> None:
@@ -207,7 +194,7 @@ def generate_answer(
     }
 
     answer = ""
-    for attempt in range(2):
+    for attempt in range(3):
         if attempt:
             parameters["instructions"] = (
                 f"{INSTRUCTIONS}\n\n{mode_instructions}\n\n{CORRECTION}"
@@ -220,6 +207,4 @@ def generate_answer(
             _emit_safe_answer(answer, on_delta)
             return answer
 
-    answer = _in_character_fallback(question)
-    _emit_safe_answer(answer, on_delta)
-    return answer
+    raise RagError("Response generation failed.")

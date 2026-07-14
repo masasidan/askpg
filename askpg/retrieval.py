@@ -78,15 +78,11 @@ def rewrite_question(
 
 
 def _balanced_selection(
-    question: str,
     ranked: Sequence[SearchResult],
     *,
     limit: int,
 ) -> list[SearchResult]:
-    explicitly_about_tweets = any(
-        term in question.lower() for term in ("tweet", "twitter", "post on x")
-    )
-    tweet_limit = limit if explicitly_about_tweets else max(3, limit // 2)
+    tweet_limit = max(3, limit // 2)
     selected: list[SearchResult] = []
     per_document: dict[str, int] = {}
     tweets = 0
@@ -156,4 +152,4 @@ def rerank_sources(
         ranked = []
     ranked_ids = {result.chunk_id for result in ranked}
     ranked.extend(result for result in candidates if result.chunk_id not in ranked_ids)
-    return _balanced_selection(question, ranked, limit=limit)
+    return _balanced_selection(ranked, limit=limit)

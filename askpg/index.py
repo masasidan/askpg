@@ -661,8 +661,7 @@ def retrieve(
     diversified: list[SearchResult] = []
     per_essay: dict[str, int] = {}
     tweet_count = 0
-    tweet_query = any(term in query.lower() for term in ("tweet", "twitter", "post on x"))
-    tweet_limit = limit if tweet_query else max(3, limit // 2)
+    tweet_limit = max(3, limit // 2)
     for result in candidates:
         if per_essay.get(result.essay_slug, 0) >= 2:
             continue
