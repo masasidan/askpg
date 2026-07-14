@@ -59,9 +59,6 @@ build only the free local full-text index, run `askpg index --skip-embeddings`.
 | `/clear` | Permanently clear conversation memory |
 | `/quit` | Exit |
 
-Option/Alt+Delete removes the previous word. The animated `Thinking…` indicator clears
-as soon as the answer is ready.
-
 ## Other commands
 
 ```text
