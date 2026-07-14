@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shlex
 
 from rich.console import Console
 from rich.table import Table
@@ -24,6 +25,12 @@ from .index import (
     stats,
     sync_corpus,
     sync_tweets,
+)
+from .images import (
+    ImageAttachment,
+    ImageError,
+    load_images,
+    validate_image_collection,
 )
 from .memory import (
     clear_memory,
@@ -79,6 +86,13 @@ def _parser() -> argparse.ArgumentParser:
     ask.add_argument(
         "--research", action="store_true", help="Show inline citations and the source list"
     )
+    ask.add_argument(
+        "--image",
+        action="append",
+        default=[],
+        metavar="PATH",
+        help="Attach a screenshot or image (repeat for multiple images)",
+    )
 
     chat = subparsers.add_parser("chat", help="Start an interactive terminal conversation")
     chat.add_argument("--lexical", action="store_true", help="Disable semantic retrieval")
@@ -129,12 +143,17 @@ def _answer(
     *,
     lexical: bool,
     research: bool,
+    images: tuple[ImageAttachment, ...] = (),
 ):
     console.print("\n[bold cyan]Paul[/bold cyan]")
     with thinking(console):
         memories = search_memories(connection, question)
         retrieval_query = rewrite_question(
-            client, question, history=history, memories=memories
+            client,
+            question,
+            history=history,
+            memories=memories,
+            images=images,
         )
         candidates = retrieve(
             connection,
@@ -144,13 +163,14 @@ def _answer(
         )
         if not candidates:
             raise IndexError("No relevant passages were found for that question.")
-        sources = rerank_sources(client, question, candidates, limit=7)
+        sources = rerank_sources(client, retrieval_query, candidates, limit=7)
         answer = generate_answer(
             client,
             question,
             sources,
             history=history,
             memories=memories,
+            images=images,
             cite_sources=research,
         )
     console.print(answer, markup=False)
@@ -229,6 +249,7 @@ def command_ask(args) -> None:
     try:
         client = _openai_client()
         history = load_recent_history(connection)
+        images = tuple(load_images(args.image))
         answer, _sources = _answer(
             connection,
             client,
@@ -236,6 +257,7 @@ def command_ask(args) -> None:
             history,
             lexical=args.lexical,
             research=args.research,
+            images=images,
         )
         save_turn(connection, args.question, answer)
     finally:
@@ -249,10 +271,12 @@ def command_chat(args) -> None:
     history = load_recent_history(connection)
     last_sources = []
     research = bool(args.research)
+    pending_images: list[ImageAttachment] = []
     remembered_turns = memory_count(connection) // 2
     console.print(
         f"[bold cyan]Paul[/bold cyan] — continuing with {remembered_turns} remembered turns\n"
-        "Commands: /sources, /memory, /research, /immersive, /clear, /quit"
+        "Commands: /attach, /attachments, /detach, /sources, /memory,\n"
+        "          /research, /immersive, /clear, /quit"
     )
     try:
         while True:
@@ -265,6 +289,7 @@ def command_chat(args) -> None:
             if not question:
                 continue
             command = question.lower()
+            command_name = question.split(maxsplit=1)[0].lower()
             if command in {"/quit", "/exit", "quit", "exit"}:
                 console.print("Bye.")
                 break
@@ -293,6 +318,43 @@ def command_chat(args) -> None:
                 else:
                     console.print("No sources retrieved yet.")
                 continue
+            if command_name == "/attach":
+                raw_paths = question[len(question.split(maxsplit=1)[0]) :].strip()
+                if not raw_paths:
+                    console.print("Usage: /attach <image path>")
+                    continue
+                try:
+                    paths = shlex.split(raw_paths)
+                    new_images = load_images(paths)
+                    existing_paths = {image.path for image in pending_images}
+                    additions = []
+                    for image in new_images:
+                        if image.path not in existing_paths:
+                            additions.append(image)
+                            existing_paths.add(image.path)
+                    combined = [*pending_images, *additions]
+                    validate_image_collection(combined)
+                    pending_images = combined
+                except (ImageError, ValueError) as exc:
+                    console.print(f"[red]Could not attach image:[/red] {exc}")
+                    continue
+                count = len(pending_images)
+                console.print(
+                    f"{count} image{'s' if count != 1 else ''} ready for your next question."
+                )
+                continue
+            if command == "/attachments":
+                if not pending_images:
+                    console.print("No images are attached.")
+                else:
+                    console.print("Images ready for the next question:")
+                    for image in pending_images:
+                        console.print(f"  {image.path}", markup=False)
+                continue
+            if command == "/detach":
+                pending_images.clear()
+                console.print("Attached images cleared.")
+                continue
             answer, last_sources = _answer(
                 connection,
                 client,
@@ -300,7 +362,9 @@ def command_chat(args) -> None:
                 history,
                 lexical=args.lexical,
                 research=research,
+                images=tuple(pending_images),
             )
+            pending_images.clear()
             save_turn(connection, question, answer)
             history.extend(
                 [
@@ -364,7 +428,7 @@ def main() -> None:
     args = _parser().parse_args()
     try:
         COMMANDS[args.command](args)
-    except (IndexError, RagError, ScrapeError, TweetScrapeError) as exc:
+    except (ImageError, IndexError, RagError, ScrapeError, TweetScrapeError) as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise SystemExit(1) from exc
     except KeyboardInterrupt:
