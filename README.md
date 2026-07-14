@@ -90,7 +90,7 @@ Recent dialogue is bounded rather than sending every past conversation. Older me
 are searched locally and included only when relevant.
 
 On macOS, copy a screenshot and press Ctrl+V while the `You:` prompt is active. AskPG
-shows `[attach 1]` beside the prompt without inserting it into your message. You can
+shows `[Image #1]` beside the prompt without inserting it into your message. You can
 paste more than one image. With the text input empty, Backspace removes the most recent
 attachment. Command+V continues to paste ordinary text through the Terminal. Attached
 images are sent only with the next question and are not added to persistent memory.

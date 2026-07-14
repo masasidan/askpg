@@ -24,7 +24,7 @@ from .images import ClipboardImageUnavailable, ImageError
 def user_prompt(attachment_count: int = 0) -> FormattedText:
     fragments = [("bold ansigreen", "You:"), ("", " ")]
     for number in range(1, attachment_count + 1):
-        fragments.append(("fg:#777777", f"[attach {number}] "))
+        fragments.append(("fg:#777777", f"[Image #{number}] "))
     return FormattedText(fragments)
 
 
