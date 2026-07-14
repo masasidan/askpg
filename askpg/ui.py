@@ -111,7 +111,7 @@ def create_chat_prompt(
 
 
 class ThinkingShimmer:
-    """A moving white band across dim terminal text."""
+    """A moving high-contrast band across dim terminal text."""
 
     def __init__(
         self,
@@ -132,9 +132,9 @@ class ThinkingShimmer:
         result = Text()
         for index, character in enumerate(self.label):
             if head <= index < head + self.band_width:
-                style = "bold #ffffff" if index == head + 1 else "#eeeeee"
+                style = "bold" if index == head + 1 else ""
             else:
-                style = "#727277"
+                style = "dim"
             result.append(character, style=style)
         return result
 

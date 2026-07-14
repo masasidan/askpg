@@ -514,6 +514,13 @@ class UiTests(unittest.TestCase):
         self.assertNotEqual(first.spans, second.spans)
         self.assertEqual(first.spans, shimmer.frame(len(shimmer.label) + 2).spans)
 
+    def test_thinking_shimmer_uses_terminal_default_foreground(self):
+        frame = ThinkingShimmer().frame(0)
+        styles = {str(span.style) for span in frame.spans}
+        self.assertIn("bold", styles)
+        self.assertIn("dim", styles)
+        self.assertFalse(any("#" in style for style in styles))
+
 
 if __name__ == "__main__":
     unittest.main()
