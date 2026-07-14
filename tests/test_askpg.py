@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import tempfile
@@ -14,6 +15,7 @@ from askpg.index import (
     sync_corpus,
     sync_tweets,
 )
+from askpg.images import ImageAttachment, ImageError, _gif_frame_count, load_image
 from askpg.memory import clear_memory, load_recent_history, memory_count, save_turn
 from askpg.rag import RagError, breaks_character, generate_answer, source_prompt
 from askpg.retrieval import rerank_sources, rewrite_question
@@ -179,6 +181,38 @@ class MemoryTests(unittest.TestCase):
             self.assertEqual(0, cleared)
 
 
+class ImageTests(unittest.TestCase):
+    def test_png_is_loaded_as_a_base64_data_url(self):
+        png = base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "screen shot.png"
+            path.write_bytes(png)
+            image = load_image(path)
+
+        self.assertEqual("image/png", image.media_type)
+        self.assertTrue(image.data_url.startswith("data:image/png;base64,"))
+        self.assertEqual(len(png), image.size)
+
+    def test_unsupported_files_are_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "not-an-image.txt"
+            path.write_text("hello", encoding="utf-8")
+            with self.assertRaises(ImageError):
+                load_image(path)
+
+    def test_gif_frame_parser_does_not_count_compressed_commas(self):
+        static_gif = (
+            b"GIF89a\x01\x00\x01\x00\x00\x00\x00"
+            b"\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00"
+            b"\x02\x01\x2c\x00\x3b"
+        )
+        animated_gif = static_gif[:-1] + static_gif[13:]
+        self.assertEqual(1, _gif_frame_count(static_gif))
+        self.assertEqual(2, _gif_frame_count(animated_gif))
+
+
 class RagTests(unittest.TestCase):
     def setUp(self):
         self.source = SearchResult(
@@ -231,6 +265,43 @@ class RagTests(unittest.TestCase):
         self.assertEqual("What should I build?", sent[0]["content"])
         self.assertIn("And what next?", sent[-1]["content"])
         self.assertFalse(client.responses.parameters["store"])
+
+    def test_attached_image_is_sent_with_the_current_question(self):
+        class Response:
+            output_text = "The error is in the assumption behind that screen."
+
+        class Responses:
+            def __init__(self):
+                self.parameters = None
+
+            def create(self, **parameters):
+                self.parameters = parameters
+                return Response()
+
+        class Client:
+            def __init__(self):
+                self.responses = Responses()
+
+        image = ImageAttachment(
+            path=Path("/tmp/screenshot.png"),
+            media_type="image/png",
+            data_url="data:image/png;base64,AAAA",
+            size=3,
+        )
+        client = Client()
+        generate_answer(
+            client,
+            "What do you make of this?",
+            [self.source],
+            images=[image],
+        )
+
+        content = client.responses.parameters["input"][-1]["content"]
+        self.assertEqual("input_text", content[0]["type"])
+        self.assertIn("What do you make of this?", content[0]["text"])
+        self.assertEqual("input_image", content[1]["type"])
+        self.assertEqual(image.data_url, content[1]["image_url"])
+        self.assertEqual("original", content[1]["detail"])
 
     def test_character_break_is_hidden_and_regenerated(self):
         class Response:
@@ -338,6 +409,40 @@ class RetrievalTests(unittest.TestCase):
         ranked = rerank_sources(client, "How do I test it?", candidates, limit=2)
         self.assertEqual("how to validate a startup idea", rewritten)
         self.assertEqual([2, 1], [result.chunk_id for result in ranked])
+
+    def test_rewrite_uses_the_attached_image(self):
+        class Response:
+            output_text = '{"search_query":"debugging an early product interface"}'
+
+        class Responses:
+            def __init__(self):
+                self.parameters = None
+
+            def create(self, **parameters):
+                self.parameters = parameters
+                return Response()
+
+        class Client:
+            def __init__(self):
+                self.responses = Responses()
+
+        image = ImageAttachment(
+            path=Path("/tmp/screenshot.png"),
+            media_type="image/png",
+            data_url="data:image/png;base64,AAAA",
+            size=3,
+        )
+        client = Client()
+        rewritten = rewrite_question(
+            client,
+            "What is wrong here?",
+            images=[image],
+        )
+
+        self.assertEqual("debugging an early product interface", rewritten)
+        sent = client.responses.parameters["input"]
+        self.assertEqual("input_text", sent[0]["content"][0]["type"])
+        self.assertEqual(image.data_url, sent[0]["content"][1]["image_url"])
 
 
 class UiTests(unittest.TestCase):

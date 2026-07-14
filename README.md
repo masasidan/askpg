@@ -22,6 +22,7 @@ lets you inspect the evidence behind the most recent answer.
 - Combines SQLite full-text search with OpenAI semantic embeddings.
 - Rewrites conversational follow-ups into standalone searches and reranks the results.
 - Keeps persistent conversation memory across terminal sessions.
+- Accepts screenshots and other image attachments for visual questions.
 - Answers in an immersive first-person voice while guarding against character breaks.
 - Hides citations by default; `/research` and `/sources` make the evidence visible.
 
@@ -53,6 +54,9 @@ build only the free local full-text index, run `askpg index --skip-embeddings`.
 | Command | Action |
 | --- | --- |
 | `/sources` | Show evidence used for the last answer |
+| `/attach <path>` | Attach an image to your next question |
+| `/attachments` | List images waiting to be sent |
+| `/detach` | Clear images waiting to be sent |
 | `/research` | Turn inline citations and source lists on |
 | `/immersive` | Hide citations and source lists again |
 | `/memory` | Show how many conversation turns are stored locally |
@@ -69,6 +73,7 @@ askpg index --skip-embeddings            build only the SQLite full-text index
 askpg embed                              add missing semantic embeddings later
 askpg search "how to find ideas"         inspect retrieved passages
 askpg ask "How should I pick an idea?"   ask one immersive question
+askpg ask "What is wrong here?" --image screenshot.png
 askpg ask --research "..."               ask with citations and sources visible
 askpg chat                               start an interactive conversation
 askpg stats                              show corpus and embedding statistics
@@ -86,6 +91,10 @@ askpg doctor                             check setup without exposing your key
 
 Recent dialogue is bounded rather than sending every past conversation. Older messages
 are searched locally and included only when relevant.
+
+To use a screenshot during chat, type `/attach ` and drag the image file into the
+Terminal, then press Enter. Ask your question on the next prompt. Attached images are
+sent only with that question and are not added to persistent conversation memory.
 
 ## Models and API usage
 
@@ -110,7 +119,8 @@ your machine.
 
 Responses are sent with `store=False`. The local corpus and full conversation database
 remain on your machine, but the query context and selected passages needed for an
-answer are sent to the OpenAI API.
+answer are sent to the OpenAI API. Attached images are also sent to the API for visual
+analysis, but AskPG does not copy them into its data directory.
 
 The tweet importer uses the public
 [`aaahmet/paulg-tweets`](https://huggingface.co/datasets/aaahmet/paulg-tweets) archive
